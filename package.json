@@ -1,0 +1,24 @@
+{
+  "name": "path-based-router",
+  "version": "0.1.0",
+  "description": "A Cloudflare Worker for path-based application routing",
+  "author": "Oliver Steele <steele@osteele.com>",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "bun build src/worker.ts --outdir=dist",
+    "dev": "wrangler dev",
+    "deploy": "bun run test && wrangler deploy",
+    "prepare": "husky",
+    "test": "bun test",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240208.0",
+    "@types/bun": "latest",
+    "@types/jest": "^29.5.12",
+    "husky": "^9.1.5",
+    "typescript": "^5.5.4",
+    "wrangler": "^3.78.12"
+  }
+}

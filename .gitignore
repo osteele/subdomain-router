@@ -1,0 +1,16 @@
+# Dependencies
+node_modules
+.env
+
+# Build
+dist
+.wrangler
+.dev.vars
+
+# Testing
+coverage
+
+# Misc
+.DS_Store
+*.pem
+.vscode

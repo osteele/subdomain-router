@@ -1,0 +1,13 @@
+{
+  // Disable header increment warning
+  "MD001": false,
+  // Disable line length warning
+  "MD013": false,
+  // Disable ordered list prefix checking
+  "MD029": false,
+  "ol-prefix": false,
+  // Disable blank line after list warning
+  "MD031": false,
+  // Disable list marker in blank line warning
+  "MD032": false
+}
