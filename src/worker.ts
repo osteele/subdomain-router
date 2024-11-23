@@ -1,18 +1,27 @@
 /// <reference types="@cloudflare/workers-types" />
 
+export interface Env {
+  ROUTES: string;
+}
+
 interface RouteConfig {
   [path: string]: string;
 }
 
-const ROUTES: RouteConfig = {
-  "/tone-curve": "http://tone-curve.underconstruction.fun",
-  "/claude-chat-viewer": "https://underconstruction.fun/claude-chat-viewer",
-  "/dialog-explorer": "https://dialog-explorer.underconstruction.fun",
-  "/shutterspeak": "https://shutterspeak.underconstruction.fun",
-};
+function getRoutes(env: Env): RouteConfig {
+  try {
+    return JSON.parse(env.ROUTES);
+  } catch (e) {
+    console.error("Failed to parse ROUTES:", e);
+    return {};
+  }
+}
 
-export function computeRedirectTarget(url: URL): URL | null {
-  const matchingRoute = Object.entries(ROUTES).find(
+export function computeRedirectTarget(
+  url: URL,
+  routes: RouteConfig
+): URL | null {
+  const matchingRoute = Object.entries(routes).find(
     ([path]) =>
       url.pathname === path ||
       (url.pathname.startsWith(path) && url.pathname[path.length] === "/")
@@ -38,11 +47,13 @@ export function computeRedirectTarget(url: URL): URL | null {
 }
 
 export async function handleRequest(
-  request: Request
+  request: Request,
+  env: Env
 ): Promise<Response | null> {
   try {
     const url = new URL(request.url);
-    const redirectTarget = computeRedirectTarget(url);
+    const routes = getRoutes(env);
+    const redirectTarget = computeRedirectTarget(url, routes);
 
     if (!redirectTarget) {
       return null;
@@ -59,7 +70,6 @@ export async function handleRequest(
     const response = await fetch(modifiedRequest);
     const newHeaders = new Headers(response.headers);
 
-    // Only set cache headers if they're not already present
     if (!response.headers.has("Cache-Control")) {
       const contentType = response.headers.get("content-type") || "";
       const isHtml =
@@ -87,10 +97,9 @@ export async function handleRequest(
   }
 }
 
-addEventListener("fetch", (event: FetchEvent) => {
-  event.respondWith(
-    handleRequest(event.request).then(
-      (response) => response || fetch(event.request)
-    )
-  );
-});
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const response = await handleRequest(request, env);
+    return response || (await fetch(request));
+  },
+};
