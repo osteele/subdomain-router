@@ -46,6 +46,70 @@ export function computeRedirectTarget(
   return finalURL;
 }
 
+class AttributeRewriter {
+  constructor(
+    private sourcePath: string,
+    private sourceUrl: URL,
+    private targetUrl: URL
+  ) {}
+
+  // Rewrite absolute URLs from target back to source
+  private rewriteAbsoluteUrl(url: string): string {
+    if (url.startsWith(this.targetUrl.origin)) {
+      const path = url.slice(this.targetUrl.origin.length);
+      return `${this.sourceUrl.origin}${this.sourcePath}${path}`;
+    }
+    return url;
+  }
+
+  // Rewrite relative URLs to include the source path prefix
+  private rewriteRelativeUrl(url: string): string {
+    if (url.startsWith("/")) {
+      return `${this.sourcePath}${url}`;
+    }
+    return url;
+  }
+
+  element(element: Element) {
+    // Handle href attributes
+    const href = element.getAttribute("href");
+    if (href) {
+      try {
+        // Check if it's an absolute URL
+        new URL(href);
+        element.setAttribute("href", this.rewriteAbsoluteUrl(href));
+      } catch {
+        // If URL parsing fails, treat as relative
+        element.setAttribute("href", this.rewriteRelativeUrl(href));
+      }
+    }
+
+    // Handle src attributes
+    const src = element.getAttribute("src");
+    if (src) {
+      try {
+        new URL(src);
+        element.setAttribute("src", this.rewriteAbsoluteUrl(src));
+      } catch {
+        element.setAttribute("src", this.rewriteRelativeUrl(src));
+      }
+    }
+
+    // Handle meta tags with content attribute
+    if (element.tagName === "meta") {
+      const content = element.getAttribute("content");
+      if (content) {
+        try {
+          new URL(content);
+          element.setAttribute("content", this.rewriteAbsoluteUrl(content));
+        } catch {
+          // If not a URL, leave it unchanged
+        }
+      }
+    }
+  }
+}
+
 export async function handleRequest(
   request: Request,
   env: Env
@@ -70,18 +134,42 @@ export async function handleRequest(
     const response = await fetch(modifiedRequest);
     const newHeaders = new Headers(response.headers);
 
-    if (!response.headers.has("Cache-Control")) {
-      const contentType = response.headers.get("content-type") || "";
-      const isHtml =
-        contentType.toLowerCase().includes("text/html") ||
-        contentType.toLowerCase().includes("application/xhtml+xml") ||
-        url.pathname.toLowerCase().endsWith(".html");
+    const contentType = response.headers.get("content-type") || "";
+    const isHtml =
+      contentType.toLowerCase().includes("text/html") ||
+      contentType.toLowerCase().includes("application/xhtml+xml") ||
+      url.pathname.toLowerCase().endsWith(".html");
 
+    if (!response.headers.has("Cache-Control")) {
       if (isHtml) {
         newHeaders.set("Cache-Control", "no-cache");
       } else {
         newHeaders.set("Cache-Control", "public, max-age=31536000");
       }
+    }
+
+    // If it's HTML content, transform it
+    if (isHtml) {
+      const rewriter = new HTMLRewriter().on(
+        "*",
+        new AttributeRewriter(
+          Object.entries(routes).find(([path]) =>
+            url.pathname.startsWith(path)
+          )?.[0] || "",
+          url,
+          redirectTarget
+        )
+      );
+
+      const transformedResponse = rewriter.transform(
+        new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: newHeaders,
+        })
+      );
+
+      return transformedResponse;
     }
 
     return new Response(response.body, {

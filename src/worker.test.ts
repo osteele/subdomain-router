@@ -231,3 +231,53 @@ describe("Request Handler", () => {
     });
   });
 });
+
+describe("HTML Content Transformation", () => {
+  beforeEach(() => {
+    globalThis.fetch = async () => {
+      const headers = new Headers({
+        "content-type": "text/html; charset=utf-8",
+      });
+      return new Response(
+        `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <link rel="icon" href="/icon.png">
+            <link rel="manifest" href="/manifest.json">
+            <meta property="og:url" content="https://app-one.example.com/page">
+            <script src="/script.js"></script>
+          </head>
+          <body>
+            <img src="/image.jpg">
+            <a href="/link">Link</a>
+          </body>
+        </html>
+        `,
+        { headers }
+      );
+    };
+  });
+
+  it("should rewrite relative URLs in HTML content", async () => {
+    const request = new Request("https://source.example.com/app-one/page");
+    const response = await handleRequest(request, TEST_ENV);
+    const content = await response?.text();
+
+    expect(content).toContain('href="/app-one/icon.png"');
+    expect(content).toContain('href="/app-one/manifest.json"');
+    expect(content).toContain('src="/app-one/script.js"');
+    expect(content).toContain('src="/app-one/image.jpg"');
+    expect(content).toContain('href="/app-one/link"');
+  });
+
+  it("should rewrite absolute URLs in meta tags", async () => {
+    const request = new Request("https://source.example.com/app-one/page");
+    const response = await handleRequest(request, TEST_ENV);
+    const content = await response?.text();
+
+    expect(content).toContain(
+      'content="https://source.example.com/app-one/page"'
+    );
+  });
+});
