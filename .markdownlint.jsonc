@@ -3,6 +3,8 @@
   "MD001": false,
   // Disable line length warning
   "MD013": false,
+  // Disable blanks around headings warning
+  "MD022": false,
   // Disable ordered list prefix checking
   "MD029": false,
   "ol-prefix": false,
