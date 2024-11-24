@@ -281,3 +281,54 @@ describe("HTML Content Transformation", () => {
     );
   });
 });
+
+describe("HTML Base Tag Injection", () => {
+  beforeEach(() => {
+    globalThis.fetch = async () => {
+      const headers = new Headers({
+        "content-type": "text/html; charset=utf-8",
+      });
+      return new Response(
+        `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <link rel="icon" href="./icon.png">
+            <link rel="manifest" href="manifest.json">
+            <script src="../script.js"></script>
+          </head>
+          <body>
+            <img src="./image.jpg">
+            <a href="../link">Link</a>
+          </body>
+        </html>
+        `,
+        { headers }
+      );
+    };
+  });
+
+  it("should inject base tag in head", async () => {
+    const request = new Request("https://source.example.com/app-one/page");
+    const response = await handleRequest(request, TEST_ENV);
+    const content = await response?.text();
+
+    expect(content).toContain('<base href="/app-one/">');
+
+    if (content) {
+      const basePosition = content.indexOf('<base href="/app-one/">');
+      const linkPosition = content.indexOf('<link rel="icon"');
+      expect(basePosition).toBeGreaterThan(-1);
+      expect(linkPosition).toBeGreaterThan(-1);
+      expect(basePosition).toBeLessThan(linkPosition);
+    }
+  });
+
+  it("should handle paths without trailing slash", async () => {
+    const request = new Request("https://source.example.com/app-one");
+    const response = await handleRequest(request, TEST_ENV);
+    const content = await response?.text();
+
+    expect(content).toContain('<base href="/app-one/">');
+  });
+});

@@ -14,7 +14,6 @@ json
 }
 ```
 
-
 ## Routing Behavior
 
 ### Path Matching
@@ -42,16 +41,19 @@ HTML transformation occurs when:
 - The response Content-Type is `text/html` or `application/xhtml+xml`
 - The URL path ends with `.html`
 
+### Base Tag Injection
+- A `<base>` tag is injected at the start of the `<head>` element
+- The base href is set to the source path with a trailing slash
+- Example: For route `/app-one`, injects `<base href="/app-one/">`
+- This ensures relative URLs (including `./` and `../`) resolve correctly
+
 ### URL Rewriting Rules
 
 #### Relative URLs
-Relative URLs in HTML attributes are prefixed with the source path:
-- `/icon.png` → `/app-one/icon.png`
-- `/manifest.json` → `/app-one/manifest.json`
-
-Affected attributes:
-- `href` attributes (links, stylesheets, icons, manifests)
-- `src` attributes (images, scripts, iframes)
+With the base tag in place:
+- Relative URLs are resolved by the browser relative to the base path
+- `./icon.png` resolves to `/app-one/icon.png`
+- `../manifest.json` resolves to `/manifest.json`
 
 #### Absolute URLs
 Absolute URLs from the target domain are rewritten to the source domain:
@@ -151,18 +153,19 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    A[HTML Response] --> B{Is attribute URL?}
-    B -->|href| C[Process href]
-    B -->|src| D[Process src]
-    B -->|meta content| E[Process meta]
+    A[HTML Response] --> B[Inject base tag]
+    B --> C{Is attribute URL?}
+    C -->|href| D[Process href]
+    C -->|src| E[Process src]
+    C -->|meta content| F[Process meta]
 
-    C --> F{Absolute URL?}
-    D --> F
-    E --> F
+    D --> G{Absolute URL?}
+    E --> G
+    F --> G
 
-    F -->|Yes| G[Rewrite domain to source]
-    F -->|No| H[Add source path prefix]
+    G -->|Yes| H[Rewrite domain to source]
+    G -->|No| I[Leave as relative URL]
 
-    G --> I[Final HTML]
-    H --> I
+    H --> J[Final HTML]
+    I --> J
 ```

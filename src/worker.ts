@@ -110,6 +110,22 @@ class AttributeRewriter {
   }
 }
 
+class BaseTagInjector {
+  constructor(private basePath: string) {}
+
+  element(element: Element) {
+    // Only process the <head> element
+    if (element.tagName === "head") {
+      const baseTag = `<base href="${this.basePath}${
+        this.basePath.endsWith("/") ? "" : "/"
+      }">`;
+
+      // Use true for the html option to indicate this is raw HTML
+      element.prepend(baseTag, { html: true });
+    }
+  }
+}
+
 export async function handleRequest(
   request: Request,
   env: Env
@@ -122,6 +138,12 @@ export async function handleRequest(
     if (!redirectTarget) {
       return null;
     }
+
+    // Find the matching route path
+    const routePath =
+      Object.entries(routes).find(([path]) =>
+        url.pathname.startsWith(path)
+      )?.[0] || "";
 
     const modifiedRequest = new Request(redirectTarget.toString(), {
       method: request.method,
@@ -150,16 +172,9 @@ export async function handleRequest(
 
     // If it's HTML content, transform it
     if (isHtml) {
-      const rewriter = new HTMLRewriter().on(
-        "*",
-        new AttributeRewriter(
-          Object.entries(routes).find(([path]) =>
-            url.pathname.startsWith(path)
-          )?.[0] || "",
-          url,
-          redirectTarget
-        )
-      );
+      const rewriter = new HTMLRewriter()
+        .on("*", new AttributeRewriter(routePath, url, redirectTarget))
+        .on("head", new BaseTagInjector(routePath));
 
       const transformedResponse = rewriter.transform(
         new Response(response.body, {
