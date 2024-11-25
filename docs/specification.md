@@ -7,10 +7,10 @@ This service provides URL routing and HTML content transformation for applicatio
 Routes are configured via the `ROUTES` environment variable as a JSON object mapping source paths to target URLs:
 
 ```json
-json
 {
-"/app-one": "https://app-one.example.com",
-"/app-two": "https://app-two.example.com"
+  "/app-one": "proxy:https://app-one.example.com",
+  "/app-two": "proxy:https://app-two.example.com",
+  "/": "302:https://example.com/tools"
 }
 ```
 
@@ -19,13 +19,13 @@ json
 ### Route Types
 
 1. **Proxy Routes**
-   - Standard URL target: `"/app-one": "https://app-one.example.com"`
+   - Format: `"/path": "proxy:https://target.domain"`
    - Matches path prefixes
    - Preserves additional path segments
    - Forwards request to target
 
 2. **Redirect Routes**
-   - Target prefixed with "302:": `"/": "302:https://example.com/tools"`
+   - Format: `"/path": "302:https://target.domain"`
    - Requires exact path match
    - Returns 302 redirect response
    - Preserves query parameters

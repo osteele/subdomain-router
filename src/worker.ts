@@ -17,10 +17,10 @@ function getRoutes(env: Env): RouteConfig {
   }
 }
 
-// Add this type to distinguish between redirect types
+// Add this type to distinguish between route types
 type RouteMatch = {
   targetUrl: URL;
-  isExternalRedirect: boolean;
+  type: "proxy" | "redirect";
 };
 
 export function computeRedirectTarget(
@@ -28,9 +28,16 @@ export function computeRedirectTarget(
   routes: RouteConfig
 ): RouteMatch | null {
   const matchingRoute = Object.entries(routes).find(([path, target]) => {
-    if (target.startsWith("302:")) {
-      return url.pathname === path;
+    if (target.startsWith("302:") || target.startsWith("proxy:")) {
+      // For redirects, require exact match
+      return target.startsWith("302:")
+        ? url.pathname === path
+        : // For proxy routes, allow subpaths
+          url.pathname === path ||
+            (url.pathname.startsWith(path) &&
+              url.pathname[path.length] === "/");
     }
+    // Legacy support for old format
     return (
       url.pathname === path ||
       (url.pathname.startsWith(path) && url.pathname[path.length] === "/")
@@ -42,17 +49,21 @@ export function computeRedirectTarget(
   }
 
   const [routePath, targetUrl] = matchingRoute;
-  const finalTargetUrl = targetUrl.startsWith("302:")
+  const isRedirect = targetUrl.startsWith("302:");
+  const isProxy = targetUrl.startsWith("proxy:");
+  const finalTargetUrl = isRedirect
     ? targetUrl.slice(4)
+    : isProxy
+    ? targetUrl.slice(6)
     : targetUrl;
   const targetURL = new URL(finalTargetUrl);
 
-  if (targetUrl.startsWith("302:")) {
+  if (isRedirect) {
     const finalURL = new URL(targetURL);
     finalURL.search = url.search;
     return {
       targetUrl: finalURL,
-      isExternalRedirect: true,
+      type: "redirect",
     };
   }
 
@@ -67,7 +78,7 @@ export function computeRedirectTarget(
 
   return {
     targetUrl: finalURL,
-    isExternalRedirect: false,
+    type: "proxy",
   };
 }
 
@@ -165,7 +176,7 @@ export async function handleRequest(
     }
 
     // Handle external redirects
-    if (match.isExternalRedirect) {
+    if (match.type === "redirect") {
       return Response.redirect(match.targetUrl.toString(), 302);
     }
 

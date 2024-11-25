@@ -3,10 +3,10 @@ import { computeRedirectTarget, handleRequest } from "./worker";
 
 const TEST_ENV = {
   ROUTES: JSON.stringify({
-    "/app-one": "https://app-one.example.com",
-    "/app-two": "https://app-two.example.com",
-    "/app-three": "https://app-three.example.com",
-    "/app-four": "https://app-four.example.com",
+    "/app-one": "proxy:https://app-one.example.com",
+    "/app-two": "proxy:https://app-two.example.com",
+    "/app-three": "proxy:https://app-three.example.com",
+    "/app-four": "proxy:https://app-four.example.com",
   }),
 };
 
@@ -127,7 +127,7 @@ describe("URL Transformation", () => {
     const testRoutes = {
       "/": "302:https://example.com/tools",
       "/about": "302:https://example.com/about-page",
-      "/normal": "https://app.example.com",
+      "/normal": "proxy:https://app.example.com",
     };
 
     it("should return redirect response for exact match with 302: prefix", async () => {

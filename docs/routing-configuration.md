@@ -19,8 +19,8 @@ The Path-Based Application Router needs to maintain a mapping of source paths to
 [vars]
 ROUTES = """
 {
-  "/tone-curve": "http://tone-curve.underconstruction.fun",
-  "/claude-chat-viewer": "https://underconstruction.fun/claude-chat-viewer"
+  "/tone-curve": "proxy:https://tone-curve.underconstruction.fun",
+  "/": "302:https://osteele.com/tools"
 }
 """
 ```
@@ -158,7 +158,7 @@ function getRoutes(env: Env): RouteConfig {
 [vars]
 ROUTES = """
 {
-  "/tone-curve": "https://tone-curve.underconstruction.fun",
+  "/tone-curve": "proxy:https://tone-curve.underconstruction.fun",
   "/": "302:https://osteele.com/tools"
 }
 """
@@ -167,7 +167,7 @@ ROUTES = """
 ### Route Types
 
 1. **Proxy Routes**
-   - Format: `"/path": "https://target.domain"`
+   - Format: `"/path": "proxy:https://target.domain"`
    - Behavior: Forwards request, preserving additional path segments
    - Example: `/app/extra` → `https://target.domain/extra`
 

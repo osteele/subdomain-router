@@ -24,8 +24,8 @@ The worker uses a simple routing table:
 ```javascript
 const ROUTES = {
   // Proxy routes - preserve path segments after the match
-  '/tone-curve': 'https://tone-curve.underconstruction.fun',
-  '/dialog-explorer': 'https://dialog-explorer.underconstruction.fun',
+  '/tone-curve': 'proxy:https://tone-curve.underconstruction.fun',
+  '/dialog-explorer': 'proxy:https://dialog-explorer.underconstruction.fun',
 
   // HTTP redirect - exact path match only
   '/': '302:https://osteele.com/tools'
@@ -33,8 +33,8 @@ const ROUTES = {
 ```
 
 Each entry maps a path to either:
-- A target URL (requests will be proxied, preserving additional path segments)
-- A "302:" prefixed URL (requests will receive a 302 redirect, exact path match only)
+- A proxy route (`proxy:` prefix) - requests will be proxied, preserving additional path segments
+- A redirect route (`302:` prefix) - requests will receive a 302 redirect, exact path match only
 
 ## How It Works
 
