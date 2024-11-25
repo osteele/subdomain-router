@@ -7,17 +7,21 @@
   "private": true,
   "scripts": {
     "build": "bun build src/worker.ts --outdir=dist",
+    "ci": "bun run lint && bun run test",
     "dev": "wrangler dev",
     "deploy": "bun run test && wrangler deploy",
+    "fix": "eslint --fix",
+    "lint": "oxlint --fix --jest-plugin",
     "prepare": "husky",
     "test": "bun test",
-    "type-check": "tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240208.0",
     "@types/bun": "latest",
     "@types/jest": "^29.5.12",
     "husky": "^9.1.5",
+    "oxlint": "^0.13.1",
     "typescript": "^5.5.4",
     "wrangler": "^3.78.12"
   }
