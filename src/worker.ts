@@ -17,22 +17,44 @@ function getRoutes(env: Env): RouteConfig {
   }
 }
 
+// Add this type to distinguish between redirect types
+type RouteMatch = {
+  targetUrl: URL;
+  isExternalRedirect: boolean;
+};
+
 export function computeRedirectTarget(
   url: URL,
   routes: RouteConfig
-): URL | null {
-  const matchingRoute = Object.entries(routes).find(
-    ([path]) =>
+): RouteMatch | null {
+  const matchingRoute = Object.entries(routes).find(([path, target]) => {
+    if (target.startsWith("302:")) {
+      return url.pathname === path;
+    }
+    return (
       url.pathname === path ||
       (url.pathname.startsWith(path) && url.pathname[path.length] === "/")
-  );
+    );
+  });
 
   if (!matchingRoute) {
     return null;
   }
 
   const [routePath, targetUrl] = matchingRoute;
-  const targetURL = new URL(targetUrl);
+  const finalTargetUrl = targetUrl.startsWith("302:")
+    ? targetUrl.slice(4)
+    : targetUrl;
+  const targetURL = new URL(finalTargetUrl);
+
+  if (targetUrl.startsWith("302:")) {
+    const finalURL = new URL(targetURL);
+    finalURL.search = url.search;
+    return {
+      targetUrl: finalURL,
+      isExternalRedirect: true,
+    };
+  }
 
   const remainingPath = url.pathname.slice(routePath.length);
   const finalPath =
@@ -43,7 +65,10 @@ export function computeRedirectTarget(
   const finalURL = new URL(finalPath, targetURL.origin);
   finalURL.search = url.search;
 
-  return finalURL;
+  return {
+    targetUrl: finalURL,
+    isExternalRedirect: false,
+  };
 }
 
 class AttributeRewriter {
@@ -133,19 +158,24 @@ export async function handleRequest(
   try {
     const url = new URL(request.url);
     const routes = getRoutes(env);
-    const redirectTarget = computeRedirectTarget(url, routes);
+    const match = computeRedirectTarget(url, routes);
 
-    if (!redirectTarget) {
+    if (!match) {
       return null;
     }
 
-    // Find the matching route path
+    // Handle external redirects
+    if (match.isExternalRedirect) {
+      return Response.redirect(match.targetUrl.toString(), 302);
+    }
+
+    // Find the matching route path for internal redirects
     const routePath =
       Object.entries(routes).find(([path]) =>
         url.pathname.startsWith(path)
       )?.[0] || "";
 
-    const modifiedRequest = new Request(redirectTarget.toString(), {
+    const modifiedRequest = new Request(match.targetUrl.toString(), {
       method: request.method,
       headers: new Headers(request.headers),
       body: request.body,
@@ -173,7 +203,7 @@ export async function handleRequest(
     // If it's HTML content, transform it
     if (isHtml) {
       const rewriter = new HTMLRewriter()
-        .on("*", new AttributeRewriter(routePath, url, redirectTarget))
+        .on("*", new AttributeRewriter(routePath, url, match.targetUrl))
         .on("head", new BaseTagInjector(routePath));
 
       const transformedResponse = rewriter.transform(

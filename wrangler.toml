@@ -8,7 +8,8 @@ ROUTES = '''
   "/tone-curve": "https://tone-curve.underconstruction.fun",
   "/claude-chat-viewer": "https://claude-chat-viewer.tools.osteele.com",
   "/dialog-explorer": "https://dialog-explorer.underconstruction.fun",
-  "/shutterspeak": "https://shutterspeak.underconstruction.fun"
+  "/shutterspeak": "https://shutterspeak.underconstruction.fun",
+  "/": "302:https://osteele.com/tools"
 }
 '''
 

@@ -125,14 +125,9 @@ async function getRoutes(env: Env): Promise<RouteConfig> {
 - Mixed update mechanisms
 - Potential consistency issues
 
-## Chosen Solution: Environment Variables
+## Chosen Solution: Environment Variables with Mixed Routing Types
 
-We chose to implement routing configuration using environment variables for the following reasons:
-
-1. **Simplicity**: The solution requires no additional services or infrastructure.
-2. **Performance**: Routes are available immediately at runtime with no latency.
-3. **Version Control**: Configuration changes are tracked in source control.
-4. **Deployment Safety**: Changes require explicit deployment, reducing risk of accidental modifications.
+We implement routing configuration using environment variables, supporting both proxy routes and HTTP redirects:
 
 ### Implementation
 
@@ -140,6 +135,11 @@ We chose to implement routing configuration using environment variables for the 
 interface Env {
   ROUTES: string;
 }
+
+type RouteMatch = {
+  targetUrl: URL;
+  isExternalRedirect: boolean;
+};
 
 function getRoutes(env: Env): RouteConfig {
   try {
@@ -158,11 +158,23 @@ function getRoutes(env: Env): RouteConfig {
 [vars]
 ROUTES = """
 {
-  "/tone-curve": "http://tone-curve.underconstruction.fun",
-  "/claude-chat-viewer": "https://underconstruction.fun/claude-chat-viewer"
+  "/tone-curve": "https://tone-curve.underconstruction.fun",
+  "/": "302:https://osteele.com/tools"
 }
 """
 ```
+
+### Route Types
+
+1. **Proxy Routes**
+   - Format: `"/path": "https://target.domain"`
+   - Behavior: Forwards request, preserving additional path segments
+   - Example: `/app/extra` → `https://target.domain/extra`
+
+2. **Redirect Routes**
+   - Format: `"/path": "302:https://target.domain"`
+   - Behavior: Returns 302 redirect, requires exact path match
+   - Example: `/` → `302 redirect to https://target.domain`
 
 ### Future Considerations
 

@@ -16,11 +16,28 @@ json
 
 ## Routing Behavior
 
+### Route Types
+
+1. **Proxy Routes**
+   - Standard URL target: `"/app-one": "https://app-one.example.com"`
+   - Matches path prefixes
+   - Preserves additional path segments
+   - Forwards request to target
+
+2. **Redirect Routes**
+   - Target prefixed with "302:": `"/": "302:https://example.com/tools"`
+   - Requires exact path match
+   - Returns 302 redirect response
+   - Preserves query parameters
+
 ### Path Matching
-- Exact matches: `/app-one` matches exactly `/app-one`
-- Prefix matches: `/app-one` matches `/app-one/` and `/app-one/any/path`
+- Proxy routes:
+  - Exact matches: `/app-one` matches exactly `/app-one`
+  - Prefix matches: `/app-one` matches `/app-one/` and `/app-one/any/path`
+- Redirect routes:
+  - Exact matches only: `/` only matches exactly `/`
 - Non-matches:
-  - Does not match partial words (e.g., `/app-one` does not match `/app-one-extra`)
+  - Does not match partial words
   - Returns null for any unmatched routes
 
 ### URL Transformation

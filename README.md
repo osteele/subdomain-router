@@ -1,6 +1,6 @@
 # Path-Based Application Router
 
-This Cloudflare Worker provides a way to serve multiple applications under different paths of a single domain, while maintaining separate deployments. It can route requests based on paths to either different domains or different paths on the same domain.
+This Cloudflare Worker provides a way to serve multiple applications under different paths of a single domain, while maintaining separate deployments. It supports both proxy routing and HTTP redirects.
 
 ## Use Cases
 
@@ -12,7 +12,10 @@ This Cloudflare Worker provides a way to serve multiple applications under diffe
    - `mydomain.com/tools/x` → `tools.otherdomain.com/x`
    - `mydomain.com/app` → `otherdomain.com/app`
 
-3. **Pass-through Routing**: Any paths not explicitly configured pass through to normal Cloudflare handling, allowing you to maintain other subdomains and routes.
+3. **HTTP Redirects**: Redirect specific paths to external URLs:
+   - `mydomain.com/` → `302 redirect to otherdomain.com/tools`
+
+4. **Pass-through Routing**: Any paths not explicitly configured pass through to normal Cloudflare handling.
 
 ## Configuration
 
@@ -20,30 +23,32 @@ The worker uses a simple routing table:
 
 ```javascript
 const ROUTES = {
-  '/tone-curve': 'http://tone-curve.underconstruction.fun',
-  '/claude-chat-viewer': 'https://underconstruction.fun/claude-chat-viewer',
+  // Proxy routes - preserve path segments after the match
+  '/tone-curve': 'https://tone-curve.underconstruction.fun',
   '/dialog-explorer': 'https://dialog-explorer.underconstruction.fun',
-  '/shutterspeak': 'https://shutterspeak.underconstruction.fun',
+
+  // HTTP redirect - exact path match only
+  '/': '302:https://osteele.com/tools'
 };
 ```
 
-Each entry maps a path prefix to either:
-- A domain (requests will maintain their path after the prefix)
-- A full URL (requests will append their remaining path after the target path)
+Each entry maps a path to either:
+- A target URL (requests will be proxied, preserving additional path segments)
+- A "302:" prefixed URL (requests will receive a 302 redirect, exact path match only)
 
 ## How It Works
 
-1. **Path Matching**: When a request comes in, the worker checks if the path starts with any of the configured route prefixes.
+1. **Path Matching**: When a request comes in, the worker checks the path against configured routes.
 
-2. **URL Rewriting**: If a match is found:
-   - For domain targets: Strips the prefix and forwards the remaining path
-   - For full URL targets: Appends the remaining path after the target path
+2. **URL Handling**:
+   - For proxy routes: Forwards the request, preserving additional path segments
+   - For redirect routes (prefixed with "302:"): Returns a 302 redirect response
    - Query parameters are preserved in all cases
 
-3. **Pass-through**: If no match is found, the request is passed through to normal Cloudflare handling
+3. **Pass-through**: If no match is found, the request passes through to normal Cloudflare handling
 
 4. **Headers**:
-   - The worker manages headers appropriately, removing potentially conflicting ones
+   - The worker manages headers appropriately for proxied requests
    - Adds caching headers based on content type
    - HTML content is set to no-cache
    - Static assets get long-term caching
@@ -53,9 +58,14 @@ Each entry maps a path prefix to either:
 Given the configuration above:
 
 ```text
+# Proxy routes (preserve additional path segments)
 /tone-curve/editor → http://tone-curve.underconstruction.fun/editor
-/claude-chat-viewer/settings → https://underconstruction.fun/claude-chat-viewer/settings
 /dialog-explorer/test → https://dialog-explorer.underconstruction.fun/test
+
+# Redirect routes (exact match only)
+/ → 302 redirect to https://osteele.com/tools
+
+# Pass-through
 /unknown-path → [passes through to regular Cloudflare handling]
 ```
 

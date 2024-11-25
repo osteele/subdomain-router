@@ -17,19 +17,25 @@ describe("URL Transformation", () => {
     it("should route to a different domain", () => {
       const url = new URL("https://source.example.com/app-one/editor");
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe("https://app-one.example.com/editor");
+      expect(target?.targetUrl.toString()).toBe(
+        "https://app-one.example.com/editor"
+      );
     });
 
     it("should handle root path on target domain", () => {
       const url = new URL("https://source.example.com/app-four");
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe("https://app-four.example.com/");
+      expect(target?.targetUrl.toString()).toBe(
+        "https://app-four.example.com/"
+      );
     });
 
     it("should handle root path with trailing slash on target domain", () => {
       const url = new URL("https://source.example.com/app-four/");
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe("https://app-four.example.com/");
+      expect(target?.targetUrl.toString()).toBe(
+        "https://app-four.example.com/"
+      );
     });
 
     it("should return null for non-matching routes", () => {
@@ -45,7 +51,9 @@ describe("URL Transformation", () => {
     it("should route to a path on different domain", () => {
       const url = new URL("https://source.example.com/app-two/settings");
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe("https://app-two.example.com/settings");
+      expect(target?.targetUrl.toString()).toBe(
+        "https://app-two.example.com/settings"
+      );
     });
 
     it("should preserve multiple path segments", () => {
@@ -53,7 +61,7 @@ describe("URL Transformation", () => {
         "https://source.example.com/app-three/test/nested/path"
       );
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe(
+      expect(target?.targetUrl.toString()).toBe(
         "https://app-three.example.com/test/nested/path"
       );
     });
@@ -67,7 +75,7 @@ describe("URL Transformation", () => {
         "https://source.example.com/app-one/editor?param=value"
       );
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe(
+      expect(target?.targetUrl.toString()).toBe(
         "https://app-one.example.com/editor?param=value"
       );
     });
@@ -77,7 +85,7 @@ describe("URL Transformation", () => {
         "https://source.example.com/app-one/editor?param1=value1&param2=value2"
       );
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe(
+      expect(target?.targetUrl.toString()).toBe(
         "https://app-one.example.com/editor?param1=value1&param2=value2"
       );
     });
@@ -87,7 +95,7 @@ describe("URL Transformation", () => {
         "https://source.example.com/app-one/editor?q=test%20space&filter=type%3Aimage"
       );
       const target = computeRedirectTarget(url, testRoutes);
-      expect(target?.toString()).toBe(
+      expect(target?.targetUrl.toString()).toBe(
         "https://app-one.example.com/editor?q=test%20space&filter=type%3Aimage"
       );
     });
@@ -112,6 +120,62 @@ describe("URL Transformation", () => {
       const url = new URL("https://source.example.com/app-one-editor");
       const target = computeRedirectTarget(url, testRoutes);
       expect(target).toBeNull();
+    });
+  });
+
+  describe("external redirects", () => {
+    const testRoutes = {
+      "/": "302:https://example.com/tools",
+      "/about": "302:https://example.com/about-page",
+      "/normal": "https://app.example.com",
+    };
+
+    it("should return redirect response for exact match with 302: prefix", async () => {
+      const request = new Request("https://source.example.com/");
+      const response = await handleRequest(request, {
+        ROUTES: JSON.stringify(testRoutes),
+      });
+
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get("Location")).toBe(
+        "https://example.com/tools"
+      );
+    });
+
+    it("should not match subpaths for 302: routes", async () => {
+      const request = new Request("https://source.example.com/about/extra");
+      const response = await handleRequest(request, {
+        ROUTES: JSON.stringify(testRoutes),
+      });
+      expect(response).toBeNull();
+    });
+
+    it("should preserve query parameters in external redirect", async () => {
+      const request = new Request("https://source.example.com/?param=value");
+      const response = await handleRequest(request, {
+        ROUTES: JSON.stringify(testRoutes),
+      });
+
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get("Location")).toBe(
+        "https://example.com/tools?param=value"
+      );
+    });
+
+    it("should handle normal routes with subpaths", async () => {
+      globalThis.fetch = async () => {
+        return new Response("Test response", {
+          status: 200,
+          headers: new Headers({ "content-type": "text/plain" }),
+        });
+      };
+
+      const request = new Request("https://source.example.com/normal/extra");
+      const response = await handleRequest(request, {
+        ROUTES: JSON.stringify(testRoutes),
+      });
+
+      expect(response?.status).toBe(200);
     });
   });
 });
