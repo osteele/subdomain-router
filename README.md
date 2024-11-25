@@ -27,14 +27,14 @@ const ROUTES = {
   '/tone-curve': 'proxy:https://tone-curve.underconstruction.fun',
   '/dialog-explorer': 'proxy:https://dialog-explorer.underconstruction.fun',
 
-  // HTTP redirect - exact path match only
-  '/': '302:https://osteele.com/tools'
+  // HTTP redirect - exact path match only (302: prefix is optional)
+  '/': 'https://osteele.com/tools'
 };
 ```
 
 Each entry maps a path to either:
 - A proxy route (`proxy:` prefix) - requests will be proxied, preserving additional path segments
-- A redirect route (`302:` prefix) - requests will receive a 302 redirect, exact path match only
+- A redirect route (no prefix or `302:` prefix) - requests will receive a 302 redirect, exact path match only
 
 ## How It Works
 

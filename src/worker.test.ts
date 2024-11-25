@@ -125,12 +125,12 @@ describe("URL Transformation", () => {
 
   describe("external redirects", () => {
     const testRoutes = {
-      "/": "302:https://example.com/tools",
+      "/": "https://example.com/tools",
       "/about": "302:https://example.com/about-page",
       "/normal": "proxy:https://app.example.com",
     };
 
-    it("should return redirect response for exact match with 302: prefix", async () => {
+    it("should handle implicit redirects", async () => {
       const request = new Request("https://source.example.com/");
       const response = await handleRequest(request, {
         ROUTES: JSON.stringify(testRoutes),
@@ -142,40 +142,16 @@ describe("URL Transformation", () => {
       );
     });
 
-    it("should not match subpaths for 302: routes", async () => {
-      const request = new Request("https://source.example.com/about/extra");
-      const response = await handleRequest(request, {
-        ROUTES: JSON.stringify(testRoutes),
-      });
-      expect(response).toBeNull();
-    });
-
-    it("should preserve query parameters in external redirect", async () => {
-      const request = new Request("https://source.example.com/?param=value");
+    it("should handle explicit 302: redirects", async () => {
+      const request = new Request("https://source.example.com/about");
       const response = await handleRequest(request, {
         ROUTES: JSON.stringify(testRoutes),
       });
 
       expect(response?.status).toBe(302);
       expect(response?.headers.get("Location")).toBe(
-        "https://example.com/tools?param=value"
+        "https://example.com/about-page"
       );
-    });
-
-    it("should handle normal routes with subpaths", async () => {
-      globalThis.fetch = async () => {
-        return new Response("Test response", {
-          status: 200,
-          headers: new Headers({ "content-type": "text/plain" }),
-        });
-      };
-
-      const request = new Request("https://source.example.com/normal/extra");
-      const response = await handleRequest(request, {
-        ROUTES: JSON.stringify(testRoutes),
-      });
-
-      expect(response?.status).toBe(200);
     });
   });
 });

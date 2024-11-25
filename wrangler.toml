@@ -9,7 +9,7 @@ ROUTES = '''
   "/claude-chat-viewer": "proxy:https://claude-chat-viewer.tools.osteele.com",
   "/dialog-explorer": "proxy:https://dialog-explorer.underconstruction.fun",
   "/shutterspeak": "proxy:https://shutterspeak.underconstruction.fun",
-  "/": "302:https://osteele.com/tools"
+  "/": "https://osteele.com/tools"
 }
 '''
 

@@ -25,10 +25,11 @@ Routes are configured via the `ROUTES` environment variable as a JSON object map
    - Forwards request to target
 
 2. **Redirect Routes**
-   - Format: `"/path": "302:https://target.domain"`
+   - Format: `"/path": "https://target.domain"` or `"/path": "302:https://target.domain"`
    - Requires exact path match
    - Returns 302 redirect response
    - Preserves query parameters
+   - The `302:` prefix is optional and included for backward compatibility
 
 ### Path Matching
 - Proxy routes:

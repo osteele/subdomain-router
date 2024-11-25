@@ -28,20 +28,15 @@ export function computeRedirectTarget(
   routes: RouteConfig
 ): RouteMatch | null {
   const matchingRoute = Object.entries(routes).find(([path, target]) => {
-    if (target.startsWith("302:") || target.startsWith("proxy:")) {
-      // For redirects, require exact match
-      return target.startsWith("302:")
-        ? url.pathname === path
-        : // For proxy routes, allow subpaths
-          url.pathname === path ||
-            (url.pathname.startsWith(path) &&
-              url.pathname[path.length] === "/");
+    if (target.startsWith("proxy:")) {
+      // For proxy routes, allow subpaths
+      return (
+        url.pathname === path ||
+        (url.pathname.startsWith(path) && url.pathname[path.length] === "/")
+      );
     }
-    // Legacy support for old format
-    return (
-      url.pathname === path ||
-      (url.pathname.startsWith(path) && url.pathname[path.length] === "/")
-    );
+    // For redirects (with or without 302: prefix), require exact match
+    return url.pathname === path;
   });
 
   if (!matchingRoute) {
@@ -49,16 +44,15 @@ export function computeRedirectTarget(
   }
 
   const [routePath, targetUrl] = matchingRoute;
-  const isRedirect = targetUrl.startsWith("302:");
   const isProxy = targetUrl.startsWith("proxy:");
-  const finalTargetUrl = isRedirect
-    ? targetUrl.slice(4)
-    : isProxy
+  const finalTargetUrl = isProxy
     ? targetUrl.slice(6)
+    : targetUrl.startsWith("302:")
+    ? targetUrl.slice(4)
     : targetUrl;
   const targetURL = new URL(finalTargetUrl);
 
-  if (isRedirect) {
+  if (!isProxy) {
     const finalURL = new URL(targetURL);
     finalURL.search = url.search;
     return {
