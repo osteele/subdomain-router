@@ -23,18 +23,18 @@ The worker uses a simple routing table:
 
 ```javascript
 const ROUTES = {
-  // Proxy routes - preserve path segments after the match
-  '/tone-curve': 'proxy:https://tone-curve.underconstruction.fun',
-  '/dialog-explorer': 'proxy:https://dialog-explorer.underconstruction.fun',
+  // Proxy routes - use /* to indicate subpath matching
+  '/tone-curve/*': 'proxy:https://tone-curve.underconstruction.fun/*',
+  '/dialog-explorer/*': 'proxy:https://dialog-explorer.underconstruction.fun/*',
 
-  // HTTP redirect - exact path match only (302: prefix is optional)
+  // HTTP redirect - exact path match (no wildcard)
   '/': 'https://osteele.com/tools'
 };
 ```
 
 Each entry maps a path to either:
-- A proxy route (`proxy:` prefix) - requests will be proxied, preserving additional path segments
-- A redirect route (no prefix or `302:` prefix) - requests will receive a 302 redirect, exact path match only
+- A proxy route (`proxy:` prefix and `/*` suffix) - requests will be proxied, preserving additional path segments
+- A redirect route (no prefix, no wildcard) - requests will receive a 302 redirect, exact path match only
 
 ## How It Works
 
@@ -58,12 +58,14 @@ Each entry maps a path to either:
 Given the configuration above:
 
 ```text
-# Proxy routes (preserve additional path segments)
-/tone-curve/editor → http://tone-curve.underconstruction.fun/editor
-/dialog-explorer/test → https://dialog-explorer.underconstruction.fun/test
+# Proxy routes with wildcards
+/tone-curve         → https://tone-curve.underconstruction.fun/
+/tone-curve/        → https://tone-curve.underconstruction.fun/
+/tone-curve/editor  → https://tone-curve.underconstruction.fun/editor
 
-# Redirect routes (exact match only)
-/ → 302 redirect to https://osteele.com/tools
+# Exact redirect routes
+/                   → 302 redirect to https://osteele.com/tools
+/about             → [no match, passes through]
 
 # Pass-through
 /unknown-path → [passes through to regular Cloudflare handling]

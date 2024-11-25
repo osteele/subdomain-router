@@ -3,10 +3,10 @@ import { computeRedirectTarget, handleRequest } from "./worker";
 
 const TEST_ENV = {
   ROUTES: JSON.stringify({
-    "/app-one": "proxy:https://app-one.example.com",
-    "/app-two": "proxy:https://app-two.example.com",
-    "/app-three": "proxy:https://app-three.example.com",
-    "/app-four": "proxy:https://app-four.example.com",
+    "/app-one/*": "proxy:https://app-one.example.com/*",
+    "/app-two/*": "proxy:https://app-two.example.com/*",
+    "/app-three/*": "proxy:https://app-three.example.com/*",
+    "/app-four/*": "proxy:https://app-four.example.com/*",
   }),
 };
 
@@ -126,11 +126,11 @@ describe("URL Transformation", () => {
   describe("external redirects", () => {
     const testRoutes = {
       "/": "https://example.com/tools",
-      "/about": "302:https://example.com/about-page",
-      "/normal": "proxy:https://app.example.com",
+      "/about": "https://example.com/about-page",
+      "/app/*": "proxy:https://app.example.com/*",
     };
 
-    it("should handle implicit redirects", async () => {
+    it("should handle exact path redirects", async () => {
       const request = new Request("https://source.example.com/");
       const response = await handleRequest(request, {
         ROUTES: JSON.stringify(testRoutes),
@@ -142,16 +142,36 @@ describe("URL Transformation", () => {
       );
     });
 
-    it("should handle explicit 302: redirects", async () => {
-      const request = new Request("https://source.example.com/about");
+    it("should handle wildcard proxy paths", async () => {
+      globalThis.fetch = async () => {
+        return new Response("Test response", {
+          status: 200,
+          headers: new Headers({ "content-type": "text/plain" }),
+        });
+      };
+
+      const request = new Request("https://source.example.com/app/some/path");
       const response = await handleRequest(request, {
         ROUTES: JSON.stringify(testRoutes),
       });
 
-      expect(response?.status).toBe(302);
-      expect(response?.headers.get("Location")).toBe(
-        "https://example.com/about-page"
-      );
+      expect(response?.status).toBe(200);
+    });
+
+    it("should treat /path same as /path/ for wildcard routes", async () => {
+      globalThis.fetch = async () => {
+        return new Response("Test response", {
+          status: 200,
+          headers: new Headers({ "content-type": "text/plain" }),
+        });
+      };
+
+      const request = new Request("https://source.example.com/app");
+      const response = await handleRequest(request, {
+        ROUTES: JSON.stringify(testRoutes),
+      });
+
+      expect(response?.status).toBe(200);
     });
   });
 });
@@ -301,7 +321,11 @@ describe("HTML Content Transformation", () => {
 
   it("should rewrite relative URLs in HTML content", async () => {
     const request = new Request("https://source.example.com/app-one/page");
-    const response = await handleRequest(request, TEST_ENV);
+    const response = await handleRequest(request, {
+      ROUTES: JSON.stringify({
+        "/app-one/*": "proxy:https://app-one.example.com/*",
+      }),
+    });
     const content = await response?.text();
 
     expect(content).toContain('href="/app-one/icon.png"');

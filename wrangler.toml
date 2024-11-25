@@ -5,10 +5,10 @@ compatibility_date = "2024-09-23"
 [vars]
 ROUTES = '''
 {
-  "/tone-curve": "proxy:https://tone-curve.underconstruction.fun",
-  "/claude-chat-viewer": "proxy:https://claude-chat-viewer.tools.osteele.com",
-  "/dialog-explorer": "proxy:https://dialog-explorer.underconstruction.fun",
-  "/shutterspeak": "proxy:https://shutterspeak.underconstruction.fun",
+  "/tone-curve/*": "proxy:https://tone-curve.underconstruction.fun/*",
+  "/claude-chat-viewer/*": "proxy:https://claude-chat-viewer.tools.osteele.com/*",
+  "/dialog-explorer/*": "proxy:https://dialog-explorer.underconstruction.fun/*",
+  "/shutterspeak/*": "proxy:https://shutterspeak.underconstruction.fun/*",
   "/": "https://osteele.com/tools"
 }
 '''

@@ -8,9 +8,9 @@ Routes are configured via the `ROUTES` environment variable as a JSON object map
 
 ```json
 {
-  "/app-one": "proxy:https://app-one.example.com",
-  "/app-two": "proxy:https://app-two.example.com",
-  "/": "302:https://example.com/tools"
+  "/app-one/*": "proxy:https://app-one.example.com/*",
+  "/app-two/*": "proxy:https://app-two.example.com/*",
+  "/": "https://example.com/tools"
 }
 ```
 
@@ -19,26 +19,25 @@ Routes are configured via the `ROUTES` environment variable as a JSON object map
 ### Route Types
 
 1. **Proxy Routes**
-   - Format: `"/path": "proxy:https://target.domain"`
-   - Matches path prefixes
-   - Preserves additional path segments
-   - Forwards request to target
+   - Format: `"/path/*": "proxy:https://target.domain/*"`
+   - Wildcard (`*`) in path indicates subpath matching
+   - Forwards request to target, preserving path segments after the match
+   - `/path` and `/path/` are treated as `/path/*`
 
 2. **Redirect Routes**
-   - Format: `"/path": "https://target.domain"` or `"/path": "302:https://target.domain"`
-   - Requires exact path match
+   - Format: `"/path": "https://target.domain"`
+   - No wildcard - requires exact path match
    - Returns 302 redirect response
    - Preserves query parameters
-   - The `302:` prefix is optional and included for backward compatibility
 
 ### Path Matching
-- Proxy routes:
-  - Exact matches: `/app-one` matches exactly `/app-one`
-  - Prefix matches: `/app-one` matches `/app-one/` and `/app-one/any/path`
+- Proxy routes with wildcards:
+  - `/app/*` matches `/app`, `/app/`, and `/app/any/path`
+  - Matched portion is replaced with target URL base
+  - Example: `/app/page` → `https://app.example.com/page`
 - Redirect routes:
-  - Exact matches only: `/` only matches exactly `/`
+  - Exact matches only: `/about` only matches exactly `/about`
 - Non-matches:
-  - Does not match partial words
   - Returns null for any unmatched routes
 
 ### URL Transformation

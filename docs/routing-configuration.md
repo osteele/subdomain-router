@@ -19,8 +19,9 @@ The Path-Based Application Router needs to maintain a mapping of source paths to
 [vars]
 ROUTES = """
 {
-  "/tone-curve": "proxy:https://tone-curve.underconstruction.fun",
-  "/": "302:https://osteele.com/tools"
+  "/tone-curve/*": "proxy:https://tone-curve.underconstruction.fun/*",
+  "/app/*": "proxy:https://app.example.com/*",
+  "/": "https://osteele.com/tools"
 }
 """
 ```
@@ -158,8 +159,9 @@ function getRoutes(env: Env): RouteConfig {
 [vars]
 ROUTES = """
 {
-  "/tone-curve": "proxy:https://tone-curve.underconstruction.fun",
-  "/": "302:https://osteele.com/tools"
+  "/tone-curve/*": "proxy:https://tone-curve.underconstruction.fun/*",
+  "/app/*": "proxy:https://app.example.com/*",
+  "/": "https://osteele.com/tools"
 }
 """
 ```
@@ -167,14 +169,30 @@ ROUTES = """
 ### Route Types
 
 1. **Proxy Routes**
-   - Format: `"/path": "proxy:https://target.domain"`
+   - Format: `"/path/*": "proxy:https://target.domain/*"`
    - Behavior: Forwards request, preserving additional path segments
+   - Wildcard indicates subpath matching
    - Example: `/app/extra` → `https://target.domain/extra`
+   - `/path` and `/path/` are treated as `/path/*`
 
 2. **Redirect Routes**
-   - Format: `"/path": "302:https://target.domain"`
-   - Behavior: Returns 302 redirect, requires exact path match
+   - Format: `"/path": "https://target.domain"`
+   - Behavior: Returns 302 redirect
+   - No wildcard - requires exact path match
    - Example: `/` → `302 redirect to https://target.domain`
+
+### Path Matching Examples
+
+```text
+# Proxy routes with wildcards
+/app         → https://app.example.com/
+/app/        → https://app.example.com/
+/app/editor  → https://app.example.com/editor
+
+# Exact redirect routes
+/            → 302 redirect to https://osteele.com/tools
+/about       → [no match, passes through]
+```
 
 ### Future Considerations
 

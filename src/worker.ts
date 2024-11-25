@@ -28,14 +28,18 @@ export function computeRedirectTarget(
   routes: RouteConfig
 ): RouteMatch | null {
   const matchingRoute = Object.entries(routes).find(([path, target]) => {
-    if (target.startsWith("proxy:")) {
-      // For proxy routes, allow subpaths
+    // Remove trailing * from path pattern for matching
+    const pathPattern = path.endsWith("/*") ? path.slice(0, -2) : path;
+
+    if (path.endsWith("/*")) {
+      // For wildcard paths, match the prefix or exact path (treating /path same as /path/)
       return (
-        url.pathname === path ||
-        (url.pathname.startsWith(path) && url.pathname[path.length] === "/")
+        url.pathname === pathPattern ||
+        url.pathname === pathPattern + "/" ||
+        url.pathname.startsWith(pathPattern + "/")
       );
     }
-    // For redirects (with or without 302: prefix), require exact match
+    // For exact paths, require exact match
     return url.pathname === path;
   });
 
@@ -50,29 +54,38 @@ export function computeRedirectTarget(
     : targetUrl.startsWith("302:")
     ? targetUrl.slice(4)
     : targetUrl;
-  const targetURL = new URL(finalTargetUrl);
 
-  if (!isProxy) {
-    const finalURL = new URL(targetURL);
-    finalURL.search = url.search;
-    return {
-      targetUrl: finalURL,
-      type: "redirect",
-    };
+  // Handle wildcard replacement in target URL
+  let targetURL: URL;
+  if (finalTargetUrl.includes("/*")) {
+    const baseTargetUrl = finalTargetUrl.replace("/*", "");
+    targetURL = new URL(baseTargetUrl);
+
+    // Get the part of the path after the matched prefix
+    const pathPattern = routePath.endsWith("/*")
+      ? routePath.slice(0, -2)
+      : routePath;
+    const remainingPath =
+      url.pathname === pathPattern
+        ? "/"
+        : url.pathname === pathPattern + "/"
+        ? "/"
+        : url.pathname.slice(pathPattern.length);
+
+    const finalPath =
+      targetURL.pathname === "/"
+        ? remainingPath
+        : targetURL.pathname + remainingPath;
+    targetURL = new URL(finalPath, targetURL.origin);
+  } else {
+    targetURL = new URL(finalTargetUrl);
   }
 
-  const remainingPath = url.pathname.slice(routePath.length);
-  const finalPath =
-    targetURL.pathname === "/"
-      ? remainingPath || "/"
-      : targetURL.pathname + (remainingPath || "");
-
-  const finalURL = new URL(finalPath, targetURL.origin);
-  finalURL.search = url.search;
+  targetURL.search = url.search;
 
   return {
-    targetUrl: finalURL,
-    type: "proxy",
+    targetUrl: targetURL,
+    type: isProxy ? "proxy" : "redirect",
   };
 }
 
@@ -176,9 +189,15 @@ export async function handleRequest(
 
     // Find the matching route path for internal redirects
     const routePath =
-      Object.entries(routes).find(([path]) =>
-        url.pathname.startsWith(path)
-      )?.[0] || "";
+      Object.entries(routes).find(([path]) => {
+        const pathPattern = path.endsWith("/*") ? path.slice(0, -2) : path;
+        return url.pathname.startsWith(pathPattern);
+      })?.[0] || "";
+
+    // Remove wildcard from routePath for HTML transformations
+    const transformPath = routePath.endsWith("/*")
+      ? routePath.slice(0, -2)
+      : routePath;
 
     const modifiedRequest = new Request(match.targetUrl.toString(), {
       method: request.method,
@@ -208,8 +227,8 @@ export async function handleRequest(
     // If it's HTML content, transform it
     if (isHtml) {
       const rewriter = new HTMLRewriter()
-        .on("*", new AttributeRewriter(routePath, url, match.targetUrl))
-        .on("head", new BaseTagInjector(routePath));
+        .on("*", new AttributeRewriter(transformPath, url, match.targetUrl))
+        .on("head", new BaseTagInjector(transformPath));
 
       const transformedResponse = rewriter.transform(
         new Response(response.body, {
