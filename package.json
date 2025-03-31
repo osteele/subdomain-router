@@ -23,6 +23,6 @@
     "husky": "^9.1.7",
     "oxlint": "^0.13.1",
     "typescript": "^5.5.4",
-    "wrangler": "^3.78.12"
+    "wrangler": "^4.6.0"
   }
 }
