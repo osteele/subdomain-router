@@ -8,6 +8,7 @@ ROUTES = '''
   "/tone-curve/*": "proxy:https://tone-curve.underconstruction.fun/*",
   "/claude-chat-viewer/*": "proxy:https://claude-chat-viewer.tools.osteele.com/*",
   "/dialog-explorer/*": "proxy:https://dialog-explorer.underconstruction.fun/*",
+  "/kana-falls/*": "proxy:https://kana-game.underconstruction.fun/*",
   "/shutterspeak/*": "proxy:https://shutterspeak.underconstruction.fun/*",
   "/travel-photo-explainer/*": "proxy:https://travel-journal.tools.osteele.com/*",
   "/": "https://osteele.com/tools"
