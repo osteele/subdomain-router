@@ -1,18 +1,53 @@
 {
-  "name": "path-based-router",
+  "name": "cf-path-router",
   "version": "0.1.0",
   "description": "A Cloudflare Worker for path-based application routing",
   "author": "Oliver Steele <steele@osteele.com>",
+  "license": "MIT",
   "type": "module",
-  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "router",
+    "routing",
+    "path-based",
+    "proxy",
+    "reverse-proxy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/osteele/subdomain-router.git"
+  },
+  "bugs": {
+    "url": "https://github.com/osteele/subdomain-router/issues"
+  },
+  "homepage": "https://github.com/osteele/subdomain-router#readme",
   "scripts": {
-    "build": "bun build src/worker.ts --outdir=dist",
+    "build": "bun run build:lib && bun run build:worker",
+    "build:lib": "bun build src/index.ts --outdir=dist --target=node && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build:worker": "bun build src/worker.ts --outdir=dist",
     "ci": "bun run lint && bun run test",
     "dev": "wrangler dev",
     "deploy": "bun run test && wrangler deploy",
     "fix": "eslint --fix",
     "lint": "oxlint --fix --jest-plugin",
     "prepare": "husky",
+    "prepublishOnly": "bun run ci && bun run build:lib",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

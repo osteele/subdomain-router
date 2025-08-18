@@ -1,0 +1,50 @@
+# Source files (only ship dist)
+src/
+*.test.ts
+*.test.js
+
+# Config files
+wrangler.toml
+tsconfig.json
+.markdownlint.jsonc
+biome.json
+.eslintrc*
+.prettierrc*
+
+# Development files
+node_modules/
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Git and CI
+.git/
+.github/
+.husky/
+.gitignore
+
+# Documentation source
+docs/
+CLAUDE.md
+
+# Build artifacts not for npm
+dist/worker.js
+dist/worker.js.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

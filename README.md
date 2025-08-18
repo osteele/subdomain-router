@@ -44,14 +44,14 @@ npm create cloudflare@latest
 2. Install this package:
 
 ```bash
-bun add @osteele/path-router
-# or: npm install @osteele/path-router
+bun add cf-path-router
+# or: npm install cf-path-router
 ```
 
 3. Create a `src/worker.ts` file with your routing configuration:
 
 ```typescript
-import { createRouter } from '@osteele/path-router';
+import { createRouter } from 'cf-path-router';
 const ROUTES = {
   '/app1/*': 'proxy:https://app1.example.com/*',
   '/app2/*': 'proxy:https://app2.example.com/*',
