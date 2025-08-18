@@ -8,11 +8,55 @@ interface RouteConfig {
   [path: string]: string;
 }
 
+function validateRoutes(routes: RouteConfig): void {
+  Object.entries(routes).forEach(([path, target]) => {
+    if (!path.startsWith('/')) {
+      throw new Error(`Invalid route path: ${path} - must start with '/'`);
+    }
+    
+    // Validate target URL format
+    const targetUrl = target.startsWith('proxy:') 
+      ? target.slice(6) 
+      : target.startsWith('302:') 
+      ? target.slice(4)
+      : target;
+    
+    // Check if target contains wildcard when path contains wildcard
+    if (path.endsWith('/*') && !targetUrl.includes('/*')) {
+      console.warn(`Route ${path} has wildcard but target ${target} does not`);
+    }
+    
+    // Validate target URL is valid
+    try {
+      if (targetUrl.includes('/*')) {
+        new URL(targetUrl.replace('/*', ''));
+      } else {
+        new URL(targetUrl);
+      }
+    } catch {
+      // Any error from URL constructor means invalid URL
+      throw new Error(`Invalid target URL for route ${path}: ${target}`);
+    }
+  });
+}
+
 function getRoutes(env: Env): RouteConfig {
+  let routes: RouteConfig;
+  
+  // Parse the JSON routes configuration
   try {
-    return JSON.parse(env.ROUTES);
+    routes = JSON.parse(env.ROUTES);
   } catch (e) {
     console.error("Failed to parse ROUTES:", e);
+    return {};
+  }
+  
+  // Separate try/catch for validation
+  try {
+    validateRoutes(routes);
+    return routes;
+  } catch (e) {
+    console.error("Invalid route configuration:", e);
     return {};
   }
 }
@@ -23,64 +67,80 @@ type RouteMatch = {
   type: "proxy" | "redirect";
 };
 
+function matchesRoutePath(pathname: string, routePath: string): boolean {
+  const pathPattern = routePath.endsWith("/*") ? routePath.slice(0, -2) : routePath;
+  
+  if (routePath.endsWith("/*")) {
+    // For wildcard paths, match the prefix or exact path (treating /path same as /path/)
+    return (
+      pathname === pathPattern ||
+      pathname === pathPattern + "/" ||
+      pathname.startsWith(pathPattern + "/")
+    );
+  }
+  // For exact paths, require exact match
+  return pathname === routePath;
+}
+
+function extractRemainingPath(pathname: string, routePath: string): string {
+  const pathPattern = routePath.endsWith("/*")
+    ? routePath.slice(0, -2)
+    : routePath;
+  
+  if (pathname === pathPattern) {
+    return "/";
+  }
+  if (pathname === pathPattern + "/") {
+    return "/";
+  }
+  return pathname.slice(pathPattern.length);
+}
+
+function parseTargetUrl(target: string): { url: string; isProxy: boolean } {
+  const isProxy = target.startsWith("proxy:");
+  const url = isProxy
+    ? target.slice(6)
+    : target.startsWith("302:")
+    ? target.slice(4)
+    : target;
+  
+  return { url, isProxy };
+}
+
+function buildTargetUrl(targetPattern: string, remainingPath: string): URL {
+  if (targetPattern.includes("/*")) {
+    const baseTargetUrl = targetPattern.replace("/*", "");
+    const targetURL = new URL(baseTargetUrl);
+    
+    const finalPath =
+      targetURL.pathname === "/"
+        ? remainingPath
+        : targetURL.pathname + remainingPath;
+    
+    return new URL(finalPath, targetURL.origin);
+  }
+  
+  return new URL(targetPattern);
+}
+
 export function computeRedirectTarget(
   url: URL,
   routes: RouteConfig
 ): RouteMatch | null {
-  const matchingRoute = Object.entries(routes).find(([path, target]) => {
-    // Remove trailing * from path pattern for matching
-    const pathPattern = path.endsWith("/*") ? path.slice(0, -2) : path;
-
-    if (path.endsWith("/*")) {
-      // For wildcard paths, match the prefix or exact path (treating /path same as /path/)
-      return (
-        url.pathname === pathPattern ||
-        url.pathname === pathPattern + "/" ||
-        url.pathname.startsWith(pathPattern + "/")
-      );
-    }
-    // For exact paths, require exact match
-    return url.pathname === path;
-  });
+  const matchingRoute = Object.entries(routes).find(([path, _target]) => 
+    matchesRoutePath(url.pathname, path)
+  );
 
   if (!matchingRoute) {
     return null;
   }
 
-  const [routePath, targetUrl] = matchingRoute;
-  const isProxy = targetUrl.startsWith("proxy:");
-  const finalTargetUrl = isProxy
-    ? targetUrl.slice(6)
-    : targetUrl.startsWith("302:")
-    ? targetUrl.slice(4)
-    : targetUrl;
-
-  // Handle wildcard replacement in target URL
-  let targetURL: URL;
-  if (finalTargetUrl.includes("/*")) {
-    const baseTargetUrl = finalTargetUrl.replace("/*", "");
-    targetURL = new URL(baseTargetUrl);
-
-    // Get the part of the path after the matched prefix
-    const pathPattern = routePath.endsWith("/*")
-      ? routePath.slice(0, -2)
-      : routePath;
-    const remainingPath =
-      url.pathname === pathPattern
-        ? "/"
-        : url.pathname === pathPattern + "/"
-        ? "/"
-        : url.pathname.slice(pathPattern.length);
-
-    const finalPath =
-      targetURL.pathname === "/"
-        ? remainingPath
-        : targetURL.pathname + remainingPath;
-    targetURL = new URL(finalPath, targetURL.origin);
-  } else {
-    targetURL = new URL(finalTargetUrl);
-  }
-
+  const [routePath, targetPattern] = matchingRoute;
+  const { url: finalTargetUrl, isProxy } = parseTargetUrl(targetPattern);
+  
+  const remainingPath = extractRemainingPath(url.pathname, routePath);
+  const targetURL = buildTargetUrl(finalTargetUrl, remainingPath);
+  
   targetURL.search = url.search;
 
   return {
@@ -117,12 +177,18 @@ class AttributeRewriter {
     // Handle href attributes
     const href = element.getAttribute("href");
     if (href) {
+      // Check if it's an absolute URL
+      let isAbsolute = false;
       try {
-        // Check if it's an absolute URL
         new URL(href);
-        element.setAttribute("href", this.rewriteAbsoluteUrl(href));
+        isAbsolute = true;
       } catch {
-        // If URL parsing fails, treat as relative
+        // Not an absolute URL, will treat as relative
+      }
+      
+      if (isAbsolute) {
+        element.setAttribute("href", this.rewriteAbsoluteUrl(href));
+      } else {
         element.setAttribute("href", this.rewriteRelativeUrl(href));
       }
     }
@@ -130,10 +196,18 @@ class AttributeRewriter {
     // Handle src attributes
     const src = element.getAttribute("src");
     if (src) {
+      // Check if it's an absolute URL
+      let isAbsolute = false;
       try {
         new URL(src);
-        element.setAttribute("src", this.rewriteAbsoluteUrl(src));
+        isAbsolute = true;
       } catch {
+        // Not an absolute URL, will treat as relative
+      }
+      
+      if (isAbsolute) {
+        element.setAttribute("src", this.rewriteAbsoluteUrl(src));
+      } else {
         element.setAttribute("src", this.rewriteRelativeUrl(src));
       }
     }
@@ -142,11 +216,17 @@ class AttributeRewriter {
     if (element.tagName === "meta") {
       const content = element.getAttribute("content");
       if (content) {
+        // Check if content is a URL
+        let isUrl = false;
         try {
           new URL(content);
-          element.setAttribute("content", this.rewriteAbsoluteUrl(content));
+          isUrl = true;
         } catch {
-          // If not a URL, leave it unchanged
+          // Not a URL, leave unchanged
+        }
+        
+        if (isUrl) {
+          element.setAttribute("content", this.rewriteAbsoluteUrl(content));
         }
       }
     }
@@ -247,6 +327,8 @@ export async function handleRequest(
       headers: newHeaders,
     });
   } catch (error) {
+    // This is the top-level handler for the request
+    // We need to return a response for any error to avoid 500s
     return new Response(
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
       { status: 500 }

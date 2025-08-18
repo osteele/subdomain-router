@@ -180,7 +180,7 @@ describe("Request Handler", () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = input.toString();
       const headers = new Headers();
 
