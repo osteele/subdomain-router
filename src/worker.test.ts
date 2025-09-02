@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { computeRedirectTarget, handleRequest } from "./worker";
+import { computeRedirectTarget, handleRequest, type Env } from "./worker";
 
 const TEST_ENV = {
   ROUTES: JSON.stringify({
@@ -394,5 +394,169 @@ describe("HTML Base Tag Injection", () => {
     const content = await response?.text();
 
     expect(content).toContain('<base href="/app-one/">');
+  });
+});
+
+describe("Cache Control for Hashed Assets", () => {
+  const mockFetchWithCache = (cacheControl?: string, contentType = "application/javascript") => {
+    return async () => {
+      const headers = new Headers({
+        "content-type": contentType,
+      });
+      if (cacheControl) {
+        headers.set("Cache-Control", cacheControl);
+      }
+      return new Response("console.log('test');", { headers });
+    };
+  };
+
+  beforeEach(() => {
+    globalThis.fetch = mockFetchWithCache();
+  });
+
+  afterEach(() => {
+    // @ts-expect-error - resetting global fetch
+    globalThis.fetch = undefined;
+  });
+
+  it("should cache hashed JS files forever when upstream has restrictive caching", async () => {
+    globalThis.fetch = mockFetchWithCache("public, max-age=0, must-revalidate");
+    
+    const request = new Request("https://source.example.com/app-one/index-353f0761.js");
+    const response = await handleRequest(request, TEST_ENV);
+    
+    expect(response?.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+  });
+
+  it("should cache hashed CSS files forever when upstream has restrictive caching", async () => {
+    globalThis.fetch = mockFetchWithCache("no-cache", "text/css");
+    
+    const request = new Request("https://source.example.com/app-one/styles-ff860190.css");
+    const response = await handleRequest(request, TEST_ENV);
+    
+    expect(response?.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+  });
+
+  it("should detect various hash patterns in filenames", async () => {
+    globalThis.fetch = mockFetchWithCache("max-age=0");
+    
+    const testCases = [
+      "app.a1b2c3d4.js",
+      "main-12345678.css",
+      "vendor.abcdef123456.js",
+      "chunk-9f8e7d6c5b4a.css"
+    ];
+
+    for (const filename of testCases) {
+      const request = new Request(`https://source.example.com/app-one/${filename}`);
+      const response = await handleRequest(request, TEST_ENV);
+      expect(response?.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+    }
+  });
+
+  it("should not override permissive upstream caching for hashed assets", async () => {
+    globalThis.fetch = mockFetchWithCache("public, max-age=604800");
+    
+    const request = new Request("https://source.example.com/app-one/bundle-abc123.js");
+    const response = await handleRequest(request, TEST_ENV);
+    
+    // Should keep the upstream cache control
+    expect(response?.headers.get("Cache-Control")).toBe("public, max-age=604800");
+  });
+
+  it("should not cache non-hashed JS/CSS files", async () => {
+    globalThis.fetch = mockFetchWithCache("max-age=0");
+    
+    const request = new Request("https://source.example.com/app-one/script.js");
+    const response = await handleRequest(request, TEST_ENV);
+    
+    // Should keep the upstream restrictive caching
+    expect(response?.headers.get("Cache-Control")).toBe("max-age=0");
+  });
+});
+
+describe("Image Caching Configuration", () => {
+  const TEST_ENV_WITH_IMAGE_CACHE: Env = {
+    ROUTES: TEST_ENV.ROUTES,
+    CACHE_IMAGES: '["/app-one/*"]'
+  };
+
+  const mockFetchImage = (cacheControl?: string) => {
+    return async () => {
+      const headers = new Headers({
+        "content-type": "image/jpeg",
+      });
+      if (cacheControl) {
+        headers.set("Cache-Control", cacheControl);
+      }
+      return new Response("", { headers });
+    };
+  };
+
+  beforeEach(() => {
+    globalThis.fetch = mockFetchImage();
+  });
+
+  afterEach(() => {
+    // @ts-expect-error - resetting global fetch
+    globalThis.fetch = undefined;
+  });
+
+  it("should cache images when enabled for the route and upstream is restrictive", async () => {
+    globalThis.fetch = mockFetchImage("no-cache");
+    
+    const request = new Request("https://source.example.com/app-one/photo.jpg");
+    const response = await handleRequest(request, TEST_ENV_WITH_IMAGE_CACHE);
+    
+    expect(response?.headers.get("Cache-Control")).toBe("public, max-age=604800");
+  });
+
+  it("should not cache images when not enabled for the route", async () => {
+    globalThis.fetch = mockFetchImage("no-cache");
+    
+    const request = new Request("https://source.example.com/app-two/photo.jpg");
+    const response = await handleRequest(request, TEST_ENV_WITH_IMAGE_CACHE);
+    
+    // Should keep upstream cache control
+    expect(response?.headers.get("Cache-Control")).toBe("no-cache");
+  });
+
+  it("should not override permissive image caching", async () => {
+    globalThis.fetch = mockFetchImage("public, max-age=86400");
+    
+    const request = new Request("https://source.example.com/app-one/photo.jpg");
+    const response = await handleRequest(request, TEST_ENV_WITH_IMAGE_CACHE);
+    
+    // Should keep upstream cache control
+    expect(response?.headers.get("Cache-Control")).toBe("public, max-age=86400");
+  });
+
+  it("should handle various image formats", async () => {
+    globalThis.fetch = mockFetchImage("max-age=0");
+    
+    const imageFormats = [
+      "image.jpg", "photo.jpeg", "icon.png", "animation.gif",
+      "modern.webp", "logo.svg", "favicon.ico", "picture.avif"
+    ];
+
+    for (const filename of imageFormats) {
+      const request = new Request(`https://source.example.com/app-one/${filename}`);
+      const response = await handleRequest(request, TEST_ENV_WITH_IMAGE_CACHE);
+      expect(response?.headers.get("Cache-Control")).toBe("public, max-age=604800");
+    }
+  });
+
+  it("should handle global image caching configuration", async () => {
+    const envWithGlobalCache: Env = {
+      ROUTES: TEST_ENV.ROUTES,
+      CACHE_IMAGES: 'true'
+    };
+    
+    globalThis.fetch = mockFetchImage("no-cache");
+    
+    const request = new Request("https://source.example.com/app-two/image.png");
+    const response = await handleRequest(request, envWithGlobalCache);
+    
+    expect(response?.headers.get("Cache-Control")).toBe("public, max-age=604800");
   });
 });

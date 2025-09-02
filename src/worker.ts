@@ -2,10 +2,70 @@
 
 export interface Env {
   ROUTES: string;
+  CACHE_IMAGES?: string;
 }
 
 interface RouteConfig {
   [path: string]: string;
+}
+
+interface CacheConfig {
+  cacheImages: boolean;
+}
+
+function getCacheConfig(env: Env, routePath: string): CacheConfig {
+  // Check if image caching is enabled for this route
+  let cacheImages = false;
+  
+  if (env.CACHE_IMAGES) {
+    try {
+      const cacheImageRoutes = JSON.parse(env.CACHE_IMAGES);
+      // Check if this specific route has image caching enabled
+      if (Array.isArray(cacheImageRoutes)) {
+        // Match with wildcard support
+        cacheImages = cacheImageRoutes.some(route => {
+          // Normalize the route path for comparison (add wildcard back if it was removed)
+          const normalizedRoutePath = routePath.endsWith('/*') ? routePath : 
+                                     routePath + '/*';
+          return route === normalizedRoutePath || route === routePath;
+        });
+      } else if (typeof cacheImageRoutes === 'boolean') {
+        cacheImages = cacheImageRoutes;
+      }
+    } catch {
+      // Invalid JSON, default to false
+      cacheImages = false;
+    }
+  }
+  
+  return { cacheImages };
+}
+
+// Function to detect if a file has a content hash in its name
+function hasContentHash(pathname: string): boolean {
+  // Match patterns like:
+  // - index-353f0761.js
+  // - app-ff860190.css
+  // - main.a1b2c3d4.js
+  // - style.12345678.css
+  // Common hash patterns: 8-10 hex chars, or base64-like patterns
+  const hashPatterns = [
+    /[.-][0-9a-f]{8,}\.(js|css)$/i,  // hex hash
+    /[.-][0-9a-zA-Z]{8,}\.(js|css)$/i, // base64-like hash
+  ];
+  
+  return hashPatterns.some(pattern => pattern.test(pathname));
+}
+
+// Function to check if a file is an image
+function isImageFile(pathname: string): boolean {
+  const imageExtensions = [
+    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg',
+    '.ico', '.bmp', '.avif', '.tiff', '.tif'
+  ];
+  
+  const lowercasePath = pathname.toLowerCase();
+  return imageExtensions.some(ext => lowercasePath.endsWith(ext));
 }
 
 function validateRoutes(routes: RouteConfig): void {
@@ -296,7 +356,32 @@ export async function handleRequest(
       contentType.toLowerCase().includes("application/xhtml+xml") ||
       url.pathname.toLowerCase().endsWith(".html");
 
-    if (!response.headers.has("Cache-Control")) {
+    // Get cache configuration for this route (use routePath with wildcard for matching)
+    const cacheConfig = getCacheConfig(env, routePath);
+    
+    // Determine caching strategy
+    const upstreamCacheControl = response.headers.get("Cache-Control");
+    const hasRestrictiveCache = upstreamCacheControl && 
+      (upstreamCacheControl.includes("max-age=0") || 
+       upstreamCacheControl.includes("no-cache") ||
+       upstreamCacheControl.includes("no-store") ||
+       upstreamCacheControl.includes("must-revalidate"));
+    
+    // Check if this is a hashed asset that should be cached
+    const isHashedAsset = hasContentHash(url.pathname);
+    const isImage = isImageFile(url.pathname);
+    
+    // Apply caching logic
+    if (isHashedAsset && hasRestrictiveCache) {
+      // Override restrictive caching for hashed JS/CSS files
+      // These files have content hashes, so they're safe to cache forever
+      newHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (isImage && cacheConfig.cacheImages && hasRestrictiveCache) {
+      // Override restrictive caching for images if enabled for this route
+      // Cache images for 1 week by default
+      newHeaders.set("Cache-Control", "public, max-age=604800");
+    } else if (!response.headers.has("Cache-Control")) {
+      // Apply default caching if no upstream cache control
       if (isHtml) {
         newHeaders.set("Cache-Control", "no-cache");
       } else {

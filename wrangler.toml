@@ -14,6 +14,9 @@ ROUTES = '''
   "/": "https://osteele.com/tools"
 }
 '''
+# Enable image caching for specific routes
+# Can be an array of route paths or boolean for all routes
+CACHE_IMAGES = '["/claude-chat-viewer/*"]'
 
 [build]
 command = "bun run build"
