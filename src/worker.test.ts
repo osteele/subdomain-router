@@ -395,6 +395,42 @@ describe("HTML Base Tag Injection", () => {
 
     expect(content).toContain('<base href="/app-one/">');
   });
+
+  it("should correctly rewrite absolute paths starting with /", async () => {
+    globalThis.fetch = async () => {
+      const headers = new Headers({
+        "content-type": "text/html; charset=utf-8",
+      });
+      return new Response(
+        `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Test</title>
+          </head>
+          <body>
+            <img src="/mascot-transparent.png">
+            <script src="/assets/app.js"></script>
+            <link href="/styles.css" rel="stylesheet">
+          </body>
+        </html>
+        `,
+        { headers }
+      );
+    };
+
+    const request = new Request("https://source.example.com/app-one/page");
+    const response = await handleRequest(request, TEST_ENV);
+    const content = await response?.text();
+
+    // Absolute paths should be rewritten to include the source path
+    expect(content).toContain('src="/app-one/mascot-transparent.png"');
+    expect(content).toContain('src="/app-one/assets/app.js"');
+    expect(content).toContain('href="/app-one/styles.css"');
+
+    // Base tag should still be injected
+    expect(content).toContain('<base href="/app-one/">');
+  });
 });
 
 describe("Cache Control for Hashed Assets", () => {
@@ -472,6 +508,127 @@ describe("Cache Control for Hashed Assets", () => {
     
     // Should keep the upstream restrictive caching
     expect(response?.headers.get("Cache-Control")).toBe("max-age=0");
+  });
+});
+
+describe("Unmatched Routes", () => {
+  it("should return null for root-level assets not matching any route", async () => {
+    // This simulates a request to /mascot-transparent.png which doesn't match any route
+    const request = new Request("https://tools.osteele.com/mascot-transparent.png");
+    const response = await handleRequest(request, TEST_ENV);
+
+    // Should return null, which causes the worker to pass through to normal Cloudflare handling
+    expect(response).toBeNull();
+  });
+
+  it("should only proxy assets under configured paths", async () => {
+    globalThis.fetch = async () => {
+      return new Response("image data", {
+        headers: new Headers({ "content-type": "image/png" })
+      });
+    };
+
+    // This should work - matches /app-one/*
+    const matchingRequest = new Request("https://source.example.com/app-one/mascot-transparent.png");
+    const matchingResponse = await handleRequest(matchingRequest, TEST_ENV);
+    expect(matchingResponse).not.toBeNull();
+    expect(matchingResponse?.status).toBe(200);
+
+    // This should NOT work - doesn't match any route
+    const nonMatchingRequest = new Request("https://source.example.com/mascot-transparent.png");
+    const nonMatchingResponse = await handleRequest(nonMatchingRequest, TEST_ENV);
+    expect(nonMatchingResponse).toBeNull();
+  });
+
+  afterEach(() => {
+    // @ts-expect-error - resetting global fetch
+    globalThis.fetch = undefined;
+  });
+});
+
+describe("Error Handling", () => {
+  it("should detect and prevent routing loops", async () => {
+    const request = new Request("https://source.example.com/app-one/test", {
+      headers: new Headers({
+        "X-Routing-Loop-Detection": "route-subdomain-to-path"
+      })
+    });
+
+    const response = await handleRequest(request, TEST_ENV);
+
+    expect(response).not.toBeNull();
+    expect(response?.status).toBe(508);
+    expect(await response?.text()).toBe("Routing loop detected");
+  });
+
+  it("should handle connection failures gracefully", async () => {
+    globalThis.fetch = async () => {
+      throw new Error("Connection refused");
+    };
+
+    const request = new Request("https://source.example.com/app-one/test");
+    const response = await handleRequest(request, TEST_ENV);
+
+    expect(response).not.toBeNull();
+    expect(response?.status).toBe(502);
+    expect(await response?.text()).toContain("Failed to connect to origin server");
+  });
+
+  afterEach(() => {
+    // @ts-expect-error - resetting global fetch
+    globalThis.fetch = undefined;
+  });
+});
+
+describe("Direct Asset Requests", () => {
+  it("should correctly proxy image requests", async () => {
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      // Verify the request is being made to the correct URL
+      const req = typeof input === 'string' ? new Request(input) : input instanceof URL ? new Request(input.toString()) : input;
+      const url = new URL(req.url);
+      expect(url.pathname).toBe("/mascot-transparent.png");
+      expect(url.origin).toBe("https://app-one.example.com");
+
+      return new Response("image data", {
+        headers: new Headers({
+          "content-type": "image/png",
+        })
+      });
+    };
+
+    const request = new Request("https://source.example.com/app-one/mascot-transparent.png");
+    const response = await handleRequest(request, TEST_ENV);
+
+    expect(response).not.toBeNull();
+    expect(response?.status).toBe(200);
+    const content = await response?.text();
+    expect(content).toBe("image data");
+  });
+
+  it("should handle root-relative image paths after HTML rewriting", async () => {
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const req = typeof input === 'string' ? new Request(input) : input instanceof URL ? new Request(input.toString()) : input;
+      const url = new URL(req.url);
+
+      // For HTML request
+      if (url.pathname === "/page") {
+        return new Response(
+          `<html><body><img src="/mascot-transparent.png"></body></html>`,
+          { headers: new Headers({ "content-type": "text/html" }) }
+        );
+      }
+
+      // For image request - this should never be called if URL rewriting works
+      return new Response("", { status: 404 });
+    };
+
+    // First, get the HTML page
+    const htmlRequest = new Request("https://source.example.com/app-one/page");
+    const htmlResponse = await handleRequest(htmlRequest, TEST_ENV);
+    const html = await htmlResponse?.text();
+
+    // The HTML should have the rewritten URL
+    expect(html).toContain('src="/app-one/mascot-transparent.png"');
   });
 });
 

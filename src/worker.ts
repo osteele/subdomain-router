@@ -347,7 +347,26 @@ export async function handleRequest(
 
     modifiedRequest.headers.delete("host");
 
-    const response = await fetch(modifiedRequest);
+    // Add a header to detect routing loops
+    const loopDetection = request.headers.get("X-Routing-Loop-Detection");
+    if (loopDetection === "route-subdomain-to-path") {
+      console.error(`Routing loop detected for ${match.targetUrl.toString()}`);
+      return new Response("Routing loop detected", { status: 508 });
+    }
+    modifiedRequest.headers.set("X-Routing-Loop-Detection", "route-subdomain-to-path");
+
+    let response: Response;
+    try {
+      response = await fetch(modifiedRequest);
+    } catch (fetchError) {
+      console.error(`Failed to fetch from origin: ${match.targetUrl.toString()}`, fetchError);
+      // Return a more specific error for connection failures
+      return new Response(
+        `Failed to connect to origin server: ${match.targetUrl.origin}`,
+        { status: 502 }
+      );
+    }
+
     const newHeaders = new Headers(response.headers);
 
     const contentType = response.headers.get("content-type") || "";
